@@ -28,39 +28,27 @@ use crate::{import::*, tung_websocket::TungWebSocket, WsErr, WsEvent};
 /// When a Protocol error is encountered during writing, it indicates that either _ws_stream_tungstenite_ or _tungstenite_ have
 /// a bug so it will panic.
 //
-pub struct WsStream<S>
-where
-    S: AsyncRead + AsyncWrite + Send + Unpin,
-{
-    inner: IoStream<TungWebSocket<S>, Vec<u8>>,
+pub struct WsStream {
+    inner: IoStream<TungWebSocket, Vec<u8>>,
 }
 
-impl<S> WsStream<S>
-where
-    S: AsyncRead + AsyncWrite + Send + Unpin,
-{
+impl WsStream {
     /// Create a new WsStream.
     //
-    pub fn new(inner: ATungSocket<S>) -> Self {
+    pub fn new(inner: AxumTungSocket) -> Self {
         Self {
             inner: IoStream::new(TungWebSocket::new(inner)),
         }
     }
 }
 
-impl<S> fmt::Debug for WsStream<S>
-where
-    S: AsyncRead + AsyncWrite + Send + Unpin,
-{
+impl fmt::Debug for WsStream {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "WsStream over Tungstenite")
     }
 }
 
-impl<S> AsyncWrite for WsStream<S>
-where
-    S: AsyncRead + AsyncWrite + Send + Unpin,
-{
+impl AsyncWrite for WsStream {
     /// Will always flush the underlying socket. Will always create an entire Websocket message from every write,
     /// so call with a sufficiently large buffer if you have performance problems. Don't call with a buffer larger
     /// than the max message size accepted by the remote endpoint.
@@ -123,10 +111,7 @@ where
     }
 }
 
-impl<S> AsyncRead for WsStream<S>
-where
-    S: AsyncRead + AsyncWrite + Send + Unpin,
-{
+impl AsyncRead for WsStream {
     fn poll_read(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -161,10 +146,7 @@ where
     }
 }
 
-impl<S> AsyncBufRead for WsStream<S>
-where
-    S: AsyncRead + AsyncWrite + Send + Unpin,
-{
+impl AsyncBufRead for WsStream {
     fn poll_fill_buf(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<&[u8]>> {
         Pin::new(&mut self.get_mut().inner).poll_fill_buf(cx)
     }
@@ -174,10 +156,7 @@ where
     }
 }
 
-impl<S> Observable<WsEvent> for WsStream<S>
-where
-    S: AsyncRead + AsyncWrite + Send + Unpin,
-{
+impl Observable<WsEvent> for WsStream {
     type Error = WsErr;
 
     fn observe(&mut self, options: ObserveConfig<WsEvent>) -> Observe<'_, WsEvent, Self::Error> {

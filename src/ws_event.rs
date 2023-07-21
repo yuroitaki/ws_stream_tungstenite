@@ -18,7 +18,7 @@ pub enum WsEvent {
     /// completed for you. Once the stream returns `None`, you can drop the [`WsStream`](crate::WsStream).
     /// This is mainly useful in order to recover the close code and reason for debugging purposes.
     //
-    CloseFrame(Option<CloseFrame<'static>>),
+    CloseFrame(Option<AxumCloseFrame<'static>>),
 
     /// The remote sent a Ping message. It will automatically be answered as long as you keep polling the
     /// `AsyncRead`. This is returned as an event in case you want to analyze the payload, since only bytes

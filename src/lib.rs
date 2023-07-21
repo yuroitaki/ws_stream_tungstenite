@@ -29,7 +29,18 @@ pub use {self::ws_err::WsErr, self::ws_event::WsEvent, self::ws_stream::WsStream
 mod import {
     pub(crate) use {
         async_io_stream::IoStream,
-        async_tungstenite::WebSocketStream as ATungSocket,
+        axum::{
+            extract::ws::{
+                CloseCode as AxumCloseCode,
+                CloseFrame as AxumCloseFrame,
+                Message as AxumMessage,
+                WebSocket as AxumTungSocket,
+            },
+            Error as AxumErr,
+        },
+        // async_tungstenite::WebSocketStream as ATungSocket,
+        tokio_tungstenite::WebSocketStream as ATungSocket,
+        tokio_util::compat::FuturesAsyncReadCompatExt,
         bitflags::bitflags,
         futures_core::{ready, Stream},
         futures_io::{AsyncBufRead, AsyncRead, AsyncWrite},
@@ -49,8 +60,9 @@ mod import {
             task::{Context, Poll},
         },
         tungstenite::{
-            protocol::{frame::coding::CloseCode, CloseFrame},
-            Error as TungErr, Message as TungMessage,
+            // protocol::{frame::coding::CloseCode, CloseFrame},
+            Error as TungErr,
+            // Message as TungMessage,
         },
     };
 

@@ -33,24 +33,18 @@ bitflags! {
 /// A wrapper around a WebSocket provided by tungstenite. This provides Stream/Sink Vec<u8> to
 /// simplify implementing AsyncRead/AsyncWrite on top of tokio-tungstenite.
 //
-pub(crate) struct TungWebSocket<S>
-where
-    S: AsyncRead + AsyncWrite + Send + Unpin,
-{
-    inner: ATungSocket<S>,
+pub(crate) struct TungWebSocket {
+    inner: AxumTungSocket,
 
     state: State,
     notifier: Notifier,
     closer: Closer,
 }
 
-impl<S> TungWebSocket<S>
-where
-    S: AsyncRead + AsyncWrite + Send + Unpin,
-{
+impl TungWebSocket {
     /// Create a new Wrapper for a WebSocket provided by Tungstenite
     //
-    pub(crate) fn new(inner: ATungSocket<S>) -> Self {
+    pub(crate) fn new(inner: AxumTungSocket) -> Self {
         Self {
             inner,
             state: State::empty(),
@@ -99,7 +93,7 @@ where
     //
     fn send_closeframe(
         &mut self,
-        code: CloseCode,
+        code: AxumCloseCode,
         reason: Cow<'static, str>,
         cx: &mut Context<'_>,
     ) -> Poll<()> {
@@ -112,7 +106,7 @@ where
             self.state.insert(State::CLOSER_PEND);
 
             self.closer
-                .queue(CloseFrame { code, reason })
+                .queue(AxumCloseFrame { code, reason })
                 .expect("ws_stream_tungstenite should not queue 2 close frames");
         }
 
@@ -140,10 +134,7 @@ where
     }
 }
 
-impl<S: Unpin> Stream for TungWebSocket<S>
-where
-    S: AsyncRead + AsyncWrite + Send,
-{
+impl Stream for TungWebSocket {
     type Item = Result<Vec<u8>, io::Error>;
 
     /// Get the next websocket message and convert it to a Vec<u8>.
@@ -197,27 +188,23 @@ where
 
             Some(Ok(msg)) => {
                 match msg {
-                    TungMessage::Binary(vec) => Some(Ok(vec)).into(),
+                    AxumMessage::Binary(vec) => Some(Ok(vec)).into(),
 
-                    TungMessage::Text(_) => {
+                    AxumMessage::Text(_) => {
                         self.queue_event(WsEvent::Error(Arc::new(WsErr::ReceivedText)));
 
                         let string = "Text messages are not supported.";
 
                         // If this returns pending, we don't want to recurse, the task will be woken up.
                         //
-                        ready!(self.as_mut().send_closeframe(
-                            CloseCode::Unsupported,
-                            string.into(),
-                            cx
-                        ));
+                        ready!(self.as_mut().send_closeframe(1003, string.into(), cx));
 
                         // Continue to drive the event and the close handshake before returning.
                         //
                         self.poll_next(cx)
                     }
 
-                    TungMessage::Close(opt) => {
+                    AxumMessage::Close(opt) => {
                         self.queue_event(WsEvent::CloseFrame(opt));
 
                         // Tungstenite will keep this stream around until the underlying connection closes.
@@ -230,19 +217,19 @@ where
 
                     // Tungstenite will have answered it already
                     //
-                    TungMessage::Ping(data) => {
+                    AxumMessage::Ping(data) => {
                         self.queue_event(WsEvent::Ping(data));
                         self.poll_next(cx)
                     }
 
-                    TungMessage::Pong(data) => {
+                    AxumMessage::Pong(data) => {
                         self.queue_event(WsEvent::Pong(data));
                         self.poll_next(cx)
                     }
 
-                    TungMessage::Frame(_) => {
-                        unreachable!("A Message::Frame(..) should be never occur from a read");
-                    }
+                    // AxumMessage::Frame(_) => {
+                    //     unreachable!("A Message::Frame(..) should be never occur from a read");
+                    // }
                 }
             }
 
@@ -251,6 +238,7 @@ where
                 //
                 #[allow(unreachable_patterns, clippy::wildcard_in_or_patterns)]
                 //
+                let err = *err.into_inner().downcast::<TungErr>().unwrap();
                 match err
 				{
 					// Just return None, as no more data will come in.
@@ -294,7 +282,7 @@ where
 					{
 						// If this returns pending, we don't want to recurse, the task will be woken up.
 						//
-						ready!( self.as_mut().send_closeframe( CloseCode::Protocol, proto_err.to_string().into(), cx ) );
+						ready!( self.as_mut().send_closeframe( 1002, proto_err.to_string().into(), cx ) );
 
 
 						self.queue_event( WsEvent::Error( Arc::new( WsErr::from(err) )) );
@@ -316,7 +304,7 @@ where
 
 						// If this returns pending, we don't want to recurse, the task will be woken up.
 						//
-						ready!( self.as_mut().send_closeframe( CloseCode::Unsupported, string.into(), cx ) );
+						ready!( self.as_mut().send_closeframe( 1003, string.into(), cx ) );
 
 						// Continue to drive the event and the close handshake before returning.
 						//
@@ -350,17 +338,14 @@ where
 					// a feature is enabled on a dependency, we have to go for wildcard here.
 					// As of tungstenite 0.19 Http and HttpFormat are also behind a feature flag.
 					//
-					_ => unreachable!( "{:?}", err ),
+					_ => unreachable!( "" ),
 				}
             }
         }
     }
 }
 
-impl<S> Sink<Vec<u8>> for TungWebSocket<S>
-where
-    S: AsyncRead + AsyncWrite + Send + Unpin,
-{
+impl Sink<Vec<u8>> for TungWebSocket {
     type Error = io::Error;
 
     fn poll_ready(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -458,12 +443,12 @@ where
 
 // Convert tungstenite errors that can happen during sending into io::Error.
 //
-fn to_io_error(err: TungErr) -> io::Error {
+fn to_io_error(err: AxumErr) -> io::Error {
     // See the wildcard at the bottom for why we need this.
     //
     #[allow(unreachable_patterns, clippy::wildcard_in_or_patterns)]
     //
-    match err
+    match *err.into_inner().downcast::<TungErr>().unwrap()
 	{
 		// Mainly on the underlying stream. Fatal
 		//
@@ -518,10 +503,7 @@ fn to_io_error(err: TungErr) -> io::Error {
 	}
 }
 
-impl<S> Observable<WsEvent> for TungWebSocket<S>
-where
-    S: AsyncRead + AsyncWrite + Send + Unpin,
-{
+impl Observable<WsEvent> for TungWebSocket {
     type Error = WsErr;
 
     fn observe(&mut self, options: ObserveConfig<WsEvent>) -> Observe<'_, WsEvent, Self::Error> {

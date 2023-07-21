@@ -15,6 +15,14 @@ pub enum WsErr {
         source: tungstenite::Error,
     },
 
+    /// A axum error.
+    //
+    Axum {
+        /// The underlying error.
+        //
+        source: axum::Error,
+    },
+
     /// An error from the underlying connection.
     //
     Io {
@@ -43,6 +51,7 @@ impl std::error::Error for WsErr {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match &self {
             WsErr::Tungstenite { ref source } => Some(source),
+            WsErr::Axum { ref source } => Some(source),
             WsErr::Io { ref source } => Some(source),
 
             WsErr::Protocol | WsErr::ReceivedText | WsErr::Closed => None,
@@ -54,6 +63,8 @@ impl fmt::Display for WsErr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self {
             WsErr::Tungstenite { source } => write!(f, "A tungstenite error happened: {}", source),
+
+            WsErr::Axum { source } => write!(f, "An axum error happened: {}", source),
 
             WsErr::Io { source } => write!(f, "An io error happened: {}", source),
 
@@ -75,6 +86,12 @@ impl From<TungErr> for WsErr {
             TungErr::Protocol(_) => WsErr::Protocol,
             source => WsErr::Tungstenite { source },
         }
+    }
+}
+
+impl From<AxumErr> for WsErr {
+    fn from(inner: AxumErr) -> WsErr {
+      WsErr::Axum { source: inner }
     }
 }
 

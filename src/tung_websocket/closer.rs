@@ -26,7 +26,7 @@ enum State {
     // is not ready to receive more data, store it here for now and try again to do this first on each
     // read or write from the user.
     //
-    Closing(CloseFrame<'static>),
+    Closing(AxumCloseFrame<'static>),
 
     // When we are closing, and the sink says yes to poll_ready, but it says Pending to flush, we store that
     // fact, so we will continue trying to flush on subsequent operations.
@@ -57,7 +57,7 @@ impl Closer {
         }
     }
 
-    pub(super) fn queue(&mut self, frame: CloseFrame<'static>) -> Result<(), ()> {
+    pub(super) fn queue(&mut self, frame: AxumCloseFrame<'static>) -> Result<(), ()> {
         if self.state != State::Ready {
             return Err(());
         }
@@ -73,7 +73,7 @@ impl Closer {
     //
     pub(super) fn run(
         mut self: Pin<&mut Self>,
-        mut socket: impl Sink<tungstenite::Message, Error = TungErr> + Unpin,
+        mut socket: impl Sink<AxumMessage, Error = AxumErr> + Unpin,
         ph: &mut Notifier,
         cx: &mut Context<'_>,
     ) -> Poll<Result<(), ()>> {
@@ -100,7 +100,7 @@ impl Closer {
                         //
                         if let Err(e) = Pin::new(&mut socket)
                             .as_mut()
-                            .start_send(TungMessage::Close(Some(frame.clone())))
+                            .start_send(AxumMessage::Close(Some(frame.clone())))
                         {
                             ph.queue(WsEvent::Error(Arc::new(e.into())));
 

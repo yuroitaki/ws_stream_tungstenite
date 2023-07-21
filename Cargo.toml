@@ -52,6 +52,20 @@ default-features = false
 optional = true
 version = "^1"
 
+[dependencies.tokio-tungstenite]
+default-features = false
+version = "^0.19"
+
+[dependencies.tokio-util]
+features = ["compat"]
+default-features = false
+version = "^0.7"
+
+[dependencies.axum]
+default-features = false
+features = ["ws"]
+version = "^0.6.18"
+
 [dependencies.tungstenite]
 default-features = false
 version = "^0.19"
